@@ -1,0 +1,22 @@
+# Build
+build/
+compile_commands.json
+
+# CubeMX
+mx.scratch
+*.ioc.bak
+!.settings
+
+# IDE
+.vs/
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store
+$RECYCLE.BIN/
