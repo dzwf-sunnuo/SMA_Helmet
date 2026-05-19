@@ -32,7 +32,8 @@
 #include "mymux.h"           /* CD74HCx4067 多路复用器 */
 #include "Move_Control.h"    /* 运动控制数据结构 */
 #include "singlemove.h"      /* SMA 运动控制 */
-#include "myusart.h"         /* 串口通讯协议 */
+#include "myusart.h"         /* 串口发送 */
+#include "ringbuffer.h"      /* DMA+IDLE 环形帧接收 */
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -117,8 +118,8 @@ int main(void)
   /* 启动 TIM3（20Hz：MUX 传感器扫描） */
   Mux_Start();
 
-  /* 启动串口中断接收（逐字节接收，状态机解析帧） */
-  USART_Start_Rx();
+  /* 启动 DMA + IDLE 中断接收（每帧仅 1 次中断） */
+  RingBuf_Start(&huart1);
 
   Delay_ms(10);
   Serial_SendByte(0x01);          /* 通知上位机：初始化完成，就绪 */
@@ -202,15 +203,13 @@ static void All_PWM_Off(void)
 }
 
 /**
-  * @brief  HAL 串口接收完成回调
-  *         每收到一个字节就交给 myusart 模块的状态机处理
+  * @brief  HAL 串口 IDLE 中断回调（DMA+IDLE 接收方式）
+  *         仅在线路空闲时触发，一整帧仅 1 次中断，大幅降低中断开销
+  * @note   替代原逐字节中断方案（HAL_UART_RxCpltCallback）
   */
-void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 {
-    if (huart->Instance == USART1)
-    {
-        UART_RxByte_Handler(rx_byte_buf);  /* 逐字节帧解析 */
-    }
+    RingBuf_RxCallback(huart, Size);  /* 环形缓冲区帧提取 */
 }
 
 /* USER CODE END 4 */
@@ -235,7 +234,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
   /* USER CODE BEGIN Callback 1 */
   if (htim->Instance == TIM2)                    /* TIM2: 20Hz 串口处理与状态上报 */
   {
-      Get_Sim_Data();                            /* 解析上位机指令帧 → Cmd/Lock */
+      RingBuf_Process();                         /* 环形缓冲区 → Cmd/Lock（DMA IDLE 方式） */
       AD_Rearrange();                            /* MUX 数据 → Point_Motion 当前值 */
 
       /* 发送 40 字节霍尔状态 + \r\n（42 字节/帧） */

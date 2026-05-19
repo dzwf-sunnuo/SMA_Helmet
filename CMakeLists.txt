@@ -53,6 +53,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Core/Src/Pointmove.c
     Core/Src/singlemove.c
     Core/Src/myusart.c
+    Core/Src/ringbuffer.c
 )
 
 # Add include paths
